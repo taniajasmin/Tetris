@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #F5E6E8, #E8D5D2);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        .game-container {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+            position: relative;
+        }
+
+        canvas {
+            border: 3px solid #ffffff20;
+            border-radius: 8px;
+            background: #FAF7F5;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .info-panel {
+            color: #fff;
+            padding: 25px;
+            background: linear-gradient(145deg, #F0E4E1, #E8D5D2);
+            border-radius: 10px;
+            box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3), -5px -5px 15px rgba(255, 255, 255, 0.05);
+            width: 200px;
+            text-align: left;
+        }
+
+        .info-panel h2 {
+            margin: 0 0 15px;
+            font-size: 24px;
+            color: #1A0F0E;;
+            text-shadow: 0 0 5px rgba(0, 240, 240, 0.5);
+        }
+
+        .info-panel div {
+            margin: 10px 0;
+            font-size: 16px;
+            color: #3D2B28;
+        }
+
+        .info-panel span {
+            color: #2A1A18;
+            font-weight: 700;
+        }
+
+        .controls {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #ccc;
+        }
+        
+        .controls h3 {
+            margin: 0 0 10px;
+            color: #1A0F0E;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .next-piece h3 {
+            color: #1A0F0E;
+            font-weight: 700;
+            font-size: 16px;
+            margin: 0 0 10px;
+        }
+
+        .game-over, .paused {
+            color: #ff4444;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .paused {
+            color: #f0a000;
+        }
+
+        .start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 10;
+        }
+
+        .start-screen.hidden {
+            display: none;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 18px;
+            background: linear-gradient(145deg, #00f0f0, #00a0a0);
+            border: none;
+            border-radius: 5px;
+            color: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .next-piece {
+            margin-top: 20px;
+        }
+
+        .next-piece canvas {
+            background: #0a0a15;
+            border-radius: 5px;
+        }
+
+        .mute-button {
+            margin: 15px 0;
+            padding: 8px 16px;
+            font-size: 14px;
+            background: #90B9A9;
+            border: none;
+            border-radius: 20px;
+            color: #fff;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .mute-button.muted {
+            background: #A18B87;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="tetris" width="300" height="600"></canvas>
+        <div class="info-panel">
+            <h2>TETRIS</h2>
+            <div>Score: <span id="score">0</span></div>
+            <div>Lines: <span id="lines">0</span></div>
+            <div>Level: <span id="level">1</span></div>
+            <div id="gameOver" class="game-over" style="display: none;">GAME OVER</div>
+            <div id="paused" class="paused" style="display: none;">PAUSED</div>
+            <button id="muteButton" class="mute-button">🔊 Sound On</button>
+            <div class="next-piece">
+                <h3>Next Piece:</h3>
+                <canvas id="nextPiece" width="120" height="120"></canvas>
+            </div>
+            <div class="controls">
+                <h3>Controls:</h3>
+                <div>← → : Move</div>
+                <div>↓ : Soft Drop</div>
+                <div>↑ : Rotate</div>
+                <div>Space : Hard Drop</div>
+                <div>P : Pause</div>
+                <div>M : Mute/Unmute</div>
+            </div>
+        </div>
+        <div id="startScreen" class="start-screen">
+            <h2 style="color: #fff; font-size: 36px; margin-bottom: 20px;">TETRIS</h2>
+            <button id="startButton">Start Game</button>
+        </div>
+    </div>
+
+    <script>
+        // Game constants
+        const COLS = 10;
+        const ROWS = 20;
+        const BLOCK_SIZE = 30;
+        const NEXT_SIZE = 30;
+
+        // Tetromino definitions
+        const PIECES = [
+            { shape: [[1,1,1,1]], color: '#B9E5E8' },      // I-piece - Light mint/cyan
+            { shape: [[1,1],[1,1]], color: '#90B9A9' },    // O-piece - Sage green
+            { shape: [[0,1,0],[1,1,1]], color: '#FFC584' }, // T-piece - Peach/orange
+            { shape: [[0,1,1],[1,1,0]], color: '#FF9C9B' }, // S-piece - Coral pink
+            { shape: [[1,1,0],[0,1,1]], color: '#A18B87' }, // Z-piece - Taupe
+            { shape: [[1,0,0],[1,1,1]], color: '#B2C9C1' }, // J-piece - Mint green
+            { shape: [[0,0,1],[1,1,1]], color: '#C9ADA7' }  // L-piece - Dusty rose
+        ];
+
+        // Sound effects (using simple Web Audio API beeps)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let muted = false;
+        
+        function playSound(frequency, duration) {
+            if (muted) return;
+            const oscillator = audioCtx.createOscillator();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+            oscillator.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + duration);
+        }
+
+        class Tetris {
+            constructor() {
+                this.canvas = document.getElementById('tetris');
+                this.ctx = this.canvas.getContext('2d');
+                this.nextCanvas = document.getElementById('nextPiece');
+                this.nextCtx = this.nextCanvas.getContext('2d');
+                this.grid = this.createGrid();
+                this.currentPiece = null;
+                this.nextPiece = null;
+                this.currentX = 0;
+                this.currentY = 0;
+                this.score = 0;
+                this.lines = 0;
+                this.level = 1;
+                this.dropInterval = 1000;
+                this.lastDrop = 0;
+                this.gameOver = false;
+                this.paused = false;
+                this.started = false;
+                this.startScreen = document.getElementById('startScreen');
+                this.startButton = document.getElementById('startButton');
+                this.muteButton = document.getElementById('muteButton');
+
+                this.init();
+            }
+
+            createGrid() {
+                return Array(ROWS).fill().map(() => Array(COLS).fill(0));
+            }
+
+            init() {
+                this.startButton.addEventListener('click', () => {
+                    this.started = true;
+                    this.startScreen.classList.add('hidden');
+                    this.paused = false;
+                    this.spawnPiece();
+                    this.gameLoop();
+                    playSound(440, 0.2);
+                });
+
+                this.muteButton.addEventListener('click', () => {
+                    muted = !muted;
+                    if (muted) {
+                        this.muteButton.textContent = '🔇 Sound Off';
+                        this.muteButton.classList.add('muted');
+                    } else {
+                        this.muteButton.textContent = '🔊 Sound On';
+                        this.muteButton.classList.remove('muted');
+                    }
+                });
+
+                this.bindControls();
+            }
+
+            bindControls() {
+                document.addEventListener('keydown', (e) => {
+                    if (!this.started || this.gameOver) return;
+
+                    switch(e.key) {
+                        case 'ArrowLeft':
+                            this.move(-1, 0);
+                            break;
+                        case 'ArrowRight':
+                            this.move(1, 0);
+                            break;
+                        case 'ArrowDown':
+                            if (this.move(0, 1)) this.score += 1;
+                            break;
+                        case 'ArrowUp':
+                            this.rotate();
+                            break;
+                        case ' ':
+                            this.hardDrop();
+                            break;
+                        case 'p':
+                        case 'P':
+                            if (this.paused) {
+                                this.paused = false;
+                                document.getElementById('paused').style.display = 'none';
+                            } else {
+                                this.paused = true;
+                                document.getElementById('paused').style.display = 'block';
+                            }
+                            playSound(300, 0.1);
+                            break;
+                        case 'm':
+                        case 'M':
+                            this.muteButton.click();
+                            break;
+                        case 'r':
+                        case 'R':
+                            if (this.gameOver) this.restart();
+                            break;
+                    }
+                });
+            }
+
+            spawnPiece() {
+                if (!this.nextPiece) {
+                    this.nextPiece = PIECES[Math.floor(Math.random() * PIECES.length)];
+                }
+                this.currentPiece = this.nextPiece;
+                this.nextPiece = PIECES[Math.floor(Math.random() * PIECES.length)];
+                this.currentX = Math.floor((COLS - this.currentPiece.shape[0].length) / 2);
+                this.currentY = 0;
+
+                if (this.collision()) {
+                    this.gameOver = true;
+                    document.getElementById('gameOver').style.display = 'block';
+                    playSound(200, 0.5);
+                }
+            }
+
+            collision(offsetX = 0, offsetY = 0, shape = null) {
+                const testShape = shape || this.currentPiece.shape;
+                for (let y = 0; y < testShape.length; y++) {
+                    for (let x = 0; x < testShape[y].length; x++) {
+                        if (testShape[y][x]) {
+                            const newX = this.currentX + x + offsetX;
+                            const newY = this.currentY + y + offsetY;
+                            if (newX < 0 || newX >= COLS || newY >= ROWS) return true;
+                            if (newY >= 0 && this.grid[newY][newX]) return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            move(offsetX, offsetY) {
+                if (!this.collision(offsetX, offsetY)) {
+                    this.currentX += offsetX;
+                    this.currentY += offsetY;
+                    playSound(500, 0.05);
+                    return true;
+                }
+                return false;
+            }
+
+            rotate() {
+                const rotated = this.currentPiece.shape[0].map((_, i) =>
+                    this.currentPiece.shape.map(row => row[i]).reverse()
+                );
+                if (!this.collision(0, 0, rotated)) {
+                    this.currentPiece.shape = rotated;
+                    playSound(600, 0.05);
+                }
+            }
+
+            hardDrop() {
+                let dropCount = 0;
+                while (this.move(0, 1)) {
+                    dropCount++;
+                }
+                this.score += dropCount * 2;
+                this.lockPiece();
+                playSound(400, 0.1); // Hard drop sound
+            }
+
+            lockPiece() {
+                const shape = this.currentPiece.shape;
+                const color = this.currentPiece.color;
+                for (let y = 0; y < shape.length; y++) {
+                    for (let x = 0; x < shape[y].length; x++) {
+                        if (shape[y][x]) {
+                            const gridY = this.currentY + y;
+                            const gridX = this.currentX + x;
+                            if (gridY >= 0) {
+                                this.grid[gridY][gridX] = color;
+                            }
+                        }
+                    }
+                }
+                this.clearLines();
+                this.spawnPiece();
+            }
+
+            clearLines() {
+                let linesCleared = 0;
+                for (let y = ROWS - 1; y >= 0; y--) {
+                    if (this.grid[y].every(cell => cell !== 0)) {
+                        this.grid.splice(y, 1);
+                        this.grid.unshift(Array(COLS).fill(0));
+                        linesCleared++;
+                        y++;
+                    }
+                }
+                if (linesCleared > 0) {
+                    this.lines += linesCleared;
+                    this.score += linesCleared * 100 * this.level;
+                    this.level = Math.floor(this.lines / 10) + 1;
+                    this.dropInterval = Math.max(100, 1000 - (this.level - 1) * 100);
+                    this.updateScore();
+                    playSound(700, 0.2); // Line clear sound
+                }
+            }
+
+            updateScore() {
+                document.getElementById('score').textContent = this.score;
+                document.getElementById('lines').textContent = this.lines;
+                document.getElementById('level').textContent = this.level;
+            }
+
+            restart() {
+                this.grid = this.createGrid();
+                this.score = 0;
+                this.lines = 0;
+                this.level = 1;
+                this.dropInterval = 1000;
+                this.gameOver = false;
+                this.paused = false;
+                document.getElementById('gameOver').style.display = 'none';
+                document.getElementById('paused').style.display = 'none';
+                this.spawnPiece();
+                this.updateScore();
+                playSound(440, 0.2); // Restart sound
+            }
+
+            drawBlock(x, y, color, ctx, size = BLOCK_SIZE) {
+                ctx.fillStyle = color;
+                ctx.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillRect(x * size + 1, y * size + 1, size - 2, 3);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(x * size + 1, y * size + size - 4, size - 2, 3);
+            }
+
+            draw() {
+                // Clear main canvas
+                this.ctx.fillStyle = '#FAF7F5';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    
+                // Draw ghost piece (before everything else so it appears underneath)
+                if (this.currentPiece) {
+                    // Calculate where the piece would land
+                    let ghostY = this.currentY;
+                    while (!this.collision(0, ghostY - this.currentY + 1)) {
+                        ghostY++;
+                    }
+                    
+                    // Draw ghost if it's below current piece
+                    if (ghostY > this.currentY) {
+                        const shape = this.currentPiece.shape;
+                        for (let y = 0; y < shape.length; y++) {
+                            for (let x = 0; x < shape[y].length; x++) {
+                                if (shape[y][x]) {
+                                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                                    this.ctx.fillRect(
+                                        (this.currentX + x) * BLOCK_SIZE + 1,
+                                        (ghostY + y) * BLOCK_SIZE + 1,
+                                        BLOCK_SIZE - 2,
+                                        BLOCK_SIZE - 2
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Draw grid
+                for (let y = 0; y < ROWS; y++) {
+                    for (let x = 0; x < COLS; x++) {
+                        if (this.grid[y][x]) {
+                            this.drawBlock(x, y, this.grid[y][x], this.ctx);
+                        }
+                    }
+                }
+
+                // Draw current piece
+                if (this.currentPiece) {
+                    const shape = this.currentPiece.shape;
+                    for (let y = 0; y < shape.length; y++) {
+                        for (let x = 0; x < shape[y].length; x++) {
+                            if (shape[y][x]) {
+                                this.drawBlock(this.currentX + x, this.currentY + y, this.currentPiece.color, this.ctx);
+                            }
+                        }
+                    }
+                }
+
+                // Draw grid lines
+                this.ctx.strokeStyle = '#00000010';
+                this.ctx.lineWidth = 1;
+                for (let i = 0; i <= COLS; i++) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(i * BLOCK_SIZE, 0);
+                    this.ctx.lineTo(i * BLOCK_SIZE, ROWS * BLOCK_SIZE);
+                    this.ctx.stroke();
+                }
+                for (let i = 0; i <= ROWS; i++) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, i * BLOCK_SIZE);
+                    this.ctx.lineTo(COLS * BLOCK_SIZE, i * BLOCK_SIZE);
+                    this.ctx.stroke();
+                }
+
+                // Draw next piece
+                this.nextCtx.fillStyle = '#0a0a15';
+                this.nextCtx.fillRect(0, 0, this.nextCanvas.width, this.nextCanvas.height);
+                if (this.nextPiece) {
+                    const shape = this.nextPiece.shape;
+                    const offsetX = (4 - shape[0].length) / 2;
+                    const offsetY = (4 - shape.length) / 2;
+                    for (let y = 0; y < shape.length; y++) {
+                        for (let x = 0; x < shape[y].length; x++) {
+                            if (shape[y][x]) {
+                                this.drawBlock(offsetX + x, offsetY + y, this.nextPiece.color, this.nextCtx, NEXT_SIZE);
+                            }
+                        }
+                    }
+                }
+            }
+
+            gameLoop(timestamp = 0) {
+                if (!this.started || this.gameOver || this.paused) {
+                    this.draw();
+                    requestAnimationFrame((t) => this.gameLoop(t));
+                    return;
+                }
+
+                if (timestamp - this.lastDrop > this.dropInterval) {
+                    if (!this.move(0, 1)) {
+                        this.lockPiece();
+                    }
+                    this.lastDrop = timestamp;
+                }
+
+                this.draw();
+                requestAnimationFrame((t) => this.gameLoop(t));
+            }
+        }
+
+        // Start the game
+        const game = new Tetris();
+    </script>
+</body>
+</html>
